@@ -1,27 +1,102 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tajweed Chatbot</title>
+  <title>مساعد التجويد</title>
   <style>
+    /* Your custom design here — full control */
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f7f7f8;
-      min-height: 100vh;
-    }
+    body { font-family: system-ui, sans-serif; background: #f0f4f8; }
+    #chat-container { max-width: 700px; margin: 0 auto; padding: 20px; }
+    #messages { min-height: 400px; margin-bottom: 16px; }
+    .msg { padding: 12px 16px; border-radius: 12px; margin-bottom: 8px; max-width: 80%; }
+    .msg.user { background: #007aff; color: white; margin-left: auto; }
+    .msg.assistant { background: white; border: 1px solid #e0e0e0; }
+    #input-area { display: flex; gap: 8px; }
+    #user-input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+    #send-btn { padding: 12px 24px; border: none; border-radius: 8px; background: #007aff; color: white; cursor: pointer; }
   </style>
 </head>
 <body>
-  <script
-    type="module"
-    src="https://e0db8796-6c00-433a-8e7d-383cc61847a7.search.ai.cloudflare.com/assets/v0.0.25/search-snippet.es.js"
-  ></script>
-  <chat-page-snippet
-    api-url="https://e0db8796-6c00-433a-8e7d-383cc61847a7.search.ai.cloudflare.com/"
-    placeholder="أسألني عن أحكام التجويد"
-  >
-  </chat-page-snippet>
+  <div id="chat-container">
+    <h1>مساعد التجويد</h1>
+    <div id="messages"></div>
+    <div id="input-area">
+      <input id="user-input" type="text" placeholder="اكتب سؤالك هنا..." autofocus>
+      <button id="send-btn" onclick="sendMessage()">إرسال</button>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "https://e0db8796-6c00-433a-8e7d-383cc61847a7.search.ai.cloudflare.com/chat/completions";
+    let conversationHistory = [];
+
+    async function sendMessage() {
+      const input = document.getElementById("user-input");
+      const text = input.value.trim();
+      if (!text) return;
+
+      // Add user message to UI
+      addMessage(text, "user");
+      conversationHistory.push({ role: "user", content: text });
+      input.value = "";
+
+      // Create assistant message bubble for streaming
+      const assistantEl = addMessage("", "assistant");
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: conversationHistory,
+            stream: true
+          })
+        });
+
+        // Read the streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ") && line !== "data: [DONE]") {
+              const data = JSON.parse(line.slice(6));
+              const delta = data.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullText += delta;
+                assistantEl.textContent = fullText;
+              }
+            }
+          }
+        }
+
+        conversationHistory.push({ role: "assistant", content: fullText });
+      } catch (err) {
+        assistantEl.textContent = "حدث خطأ. حاول مرة أخرى.";
+      }
+    }
+
+    function addMessage(text, role) {
+      const div = document.createElement("div");
+      div.className = `msg ${role}`;
+      div.textContent = text;
+      document.getElementById("messages").appendChild(div);
+      return div;
+    }
+
+    // Send on Enter
+    document.getElementById("user-input").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
 </body>
 </html>
